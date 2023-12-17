@@ -1,8 +1,10 @@
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const gravatar = require("gravatar");
+const { v4: uuidv4 } = require("uuid");
 const User = require("../../models/users");
 const HttpError = require("../../helpers/HttpError");
+const sendVerificationEmail = require("../../helpers/sendEmail");
 
 const registerUser = async (req, res, next) => {
   const { email, password } = req.body;
@@ -16,6 +18,8 @@ const registerUser = async (req, res, next) => {
       });
     }
 
+    const verificationToken = uuidv4();
+
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const avatarURL = gravatar.url(email, { s: "250", d: "retro" }, true);
@@ -24,11 +28,14 @@ const registerUser = async (req, res, next) => {
       email,
       password: hashedPassword,
       avatarURL,
+      verificationToken,
     });
 
     const token = jwt.sign({ id: newUser._id }, process.env.JWT_SECRET, {
       expiresIn: "1h",
     });
+
+    await sendVerificationEmail(email, verificationToken);
 
     res.status(201).json({
       user: {
@@ -39,6 +46,7 @@ const registerUser = async (req, res, next) => {
       token,
     });
   } catch (error) {
+    console.error("Registration error:", error);
     next(new HttpError(500, "Internal Server Error"));
   }
 };
